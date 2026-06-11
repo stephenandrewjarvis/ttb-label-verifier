@@ -64,4 +64,19 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     countryOfOrigin: "SCOTLAND",
     labelImagePath: "/samples/label-scotch.svg",
   },
+  // Intentional compliance violation for demo: the label's warning reads "Government Warning:"
+  // in title case rather than the required ALL CAPS. Every other field matches, so the review
+  // isolates the strict government-warning check and returns a REJECTED verdict.
+  "TTB-2024-005": {
+    appNumber: "TTB-2024-005",
+    applicantName: "Silverpeak Distillery Co.",
+    submittedDate: "2024-05-22",
+    brandName: "SILVERPEAK DISTILLERY",
+    classType: "Vodka",
+    alcoholContent: "40% ALC./VOL. 80 PROOF",
+    netContents: "750 mL",
+    producerName: "DISTILLED BY SILVERPEAK DISTILLERY CO. 88 ALPINE WAY, DENVER, COLORADO 80202",
+    countryOfOrigin: "",
+    labelImagePath: "/samples/label-vodka.svg",
+  },
 };

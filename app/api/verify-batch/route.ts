@@ -7,7 +7,18 @@ const sharp = require("sharp");
 
 export const maxDuration = 60;
 
-const WORKER_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js/src/worker-script/node/index.js"); // seconds — batch OCR across 4+ labels needs extra time
+const WORKER_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js/src/worker-script/node/index.js");
+// Pin Tesseract assets to the bundled copies and cache to /tmp — Vercel root is read-only
+// and the target network has no outbound CDN access. See next.config.ts tracing includes.
+const CORE_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js-core");
+const LANG_PATH = process.cwd();
+const TESSERACT_OPTIONS = {
+  workerPath: WORKER_PATH,
+  corePath: CORE_PATH,
+  langPath: LANG_PATH,
+  cachePath: "/tmp",
+  gzip: false,
+};
 
 const GOVERNMENT_WARNING =
   "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
@@ -202,7 +213,7 @@ async function extractFromImage(
     
     const { data } = await Tesseract.recognize(bufferInput, "eng", {
       logger: () => {},
-      workerPath: WORKER_PATH,
+      ...TESSERACT_OPTIONS,
     });
 
     const fullText = data.text;

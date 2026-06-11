@@ -579,13 +579,13 @@ export default function Page() {
                 <div style={{ backgroundColor: "#F0F0F0", border: "1px solid #D9D9D9", borderRadius: "4px", padding: "12px" }}>
                   <p style={{ fontSize: "11px", fontWeight: 700, color: "#565C65", margin: "0 0 4px" }}>Demo numbers</p>
                   <p style={{ fontSize: "11px", fontFamily: "monospace", color: "#1B1B1B", margin: 0, lineHeight: 1.8 }}>
-                    TTB-2024-001<br />TTB-2024-002<br />TTB-2024-003<br />TTB-2024-004
+                    {queueApps.map((a) => <React.Fragment key={a.appNumber}>{a.appNumber}<br /></React.Fragment>)}
                   </p>
                   <button
                     style={{ marginTop: "8px", fontSize: "11px", fontWeight: 600, color: FEDERAL_BLUE, background: "none", border: `1px solid ${FEDERAL_BLUE}`, borderRadius: "4px", padding: "3px 10px", cursor: "pointer" }}
-                    onClick={() => setBulkInput("TTB-2024-001\nTTB-2024-002\nTTB-2024-003\nTTB-2024-004")}
+                    onClick={() => setBulkInput(queueApps.map((a) => a.appNumber).join("\n"))}
                   >
-                    Load all 4
+                    Load all {queueApps.length}
                   </button>
                 </div>
                 <button

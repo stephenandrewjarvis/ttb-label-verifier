@@ -6,8 +6,21 @@ const sharp = require("sharp");
 
 // Turbopack resolves __dirname as /ROOT which breaks Tesseract's worker lookup.
 // Explicitly point to the real path so workers start on the first try.
-// Turbopack resolves __dirname as /ROOT which breaks Tesseract's worker lookup.
 const WORKER_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js/src/worker-script/node/index.js");
+// On Vercel the project root is read-only and there is no outbound CDN access in the target
+// network, so pin every Tesseract asset to the bundled copy and write its cache to /tmp.
+const CORE_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js-core");
+const LANG_PATH = process.cwd(); // eng.traineddata ships at the project root (ungzipped)
+const TESSERACT_OPTIONS = {
+  workerPath: WORKER_PATH,
+  corePath: CORE_PATH,
+  langPath: LANG_PATH,
+  cachePath: "/tmp",
+  gzip: false,
+};
+
+// Cold starts load the WASM core and 5 MB language model; give them headroom under the 5s bar.
+export const maxDuration = 60;
 
 const GOVERNMENT_WARNING =
   "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
@@ -65,7 +78,7 @@ export async function POST(req: NextRequest) {
   try {
     const { data } = await Tesseract.recognize(imageBuffer, "eng", {
       logger: () => {},
-      workerPath: WORKER_PATH,
+      ...TESSERACT_OPTIONS,
     });
 
     const fullText = data.text;

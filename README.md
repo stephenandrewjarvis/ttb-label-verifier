@@ -152,7 +152,9 @@ tests/verify-logic.test.ts    # 49 unit tests
 
 ## Assumptions and Trade-offs
 
-**No COLA integration.** Per Marcus, direct COLA integration is out of scope. `lib/cola-applications.ts` holds four simulated applications standing in for what would be an Azure/COLA `.NET` API call. The Application Review and Bulk Review flows are built so that swapping this module for a real API client is the only change needed.
+**No COLA integration.** Per Marcus, direct COLA integration is out of scope. `lib/cola-applications.ts` holds five simulated applications standing in for what would be an Azure/COLA `.NET` API call. The Application Review and Bulk Review flows are built so that swapping this module for a real API client is the only change needed.
+
+**One application is intentionally non-compliant.** `TTB-2024-005` (Silverpeak Vodka) has every field matching *except* a government warning printed as "Government Warning:" in title case instead of the required ALL CAPS — Jenny Park's exact real-world example. Reviewing it returns a **REJECTED** verdict, so an evaluator can see the strict warning check reject something rather than only seeing passing labels.
 
 **On-device OCR over cloud accuracy.** Tesseract was chosen specifically to satisfy the network/firewall constraint, accepting lower raw accuracy on messy photos than a cloud vision model would give. The preprocessing pipeline and human review step compensate, but very poor images may still need an agent to request a better photo — which matches current practice.
 
