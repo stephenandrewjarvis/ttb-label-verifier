@@ -26,7 +26,7 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     netContents: "750 mL",
     producerName: "BOTTLED BY OLD TOM DISTILLERY CO. 123 BOURBON TRAIL, LOUISVILLE, KENTUCKY 40202",
     countryOfOrigin: "",
-    labelImagePath: "/samples/label-bourbon.svg",
+    labelImagePath: "/samples/label-bourbon.png",
   },
   "TTB-2024-002": {
     appNumber: "TTB-2024-002",
@@ -38,7 +38,7 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     netContents: "750 mL",
     producerName: "SILVER RIDGE CELLARS, 4500 SILVERADO TRAIL, NAPA, CA 94558",
     countryOfOrigin: "",
-    labelImagePath: "/samples/label-wine.svg",
+    labelImagePath: "/samples/label-wine.png",
   },
   "TTB-2024-003": {
     appNumber: "TTB-2024-003",
@@ -50,7 +50,7 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     netContents: "12 fl oz · 355 mL",
     producerName: "IRON ANVIL BREWING CO., 1842 NW INDUSTRIAL ST, PORTLAND, OR 97209",
     countryOfOrigin: "",
-    labelImagePath: "/samples/label-beer.svg",
+    labelImagePath: "/samples/label-beer.png",
   },
   "TTB-2024-004": {
     appNumber: "TTB-2024-004",
@@ -62,7 +62,7 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     netContents: "700 mL",
     producerName: "GLEN CAIRN DISTILLERY LTD., DUFFTOWN, BANFFSHIRE AB55 4DH, SCOTLAND",
     countryOfOrigin: "SCOTLAND",
-    labelImagePath: "/samples/label-scotch.svg",
+    labelImagePath: "/samples/label-scotch.png",
   },
   // Intentional compliance violation for demo: the label's warning reads "Government Warning:"
   // in title case rather than the required ALL CAPS. Every other field matches, so the review
@@ -77,6 +77,6 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     netContents: "750 mL",
     producerName: "DISTILLED BY SILVERPEAK DISTILLERY CO. 88 ALPINE WAY, DENVER, COLORADO 80202",
     countryOfOrigin: "",
-    labelImagePath: "/samples/label-vodka.svg",
+    labelImagePath: "/samples/label-vodka.png",
   },
 };

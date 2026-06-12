@@ -2,8 +2,6 @@ import { NextRequest } from "next/server";
 import path from "path";
 import JSZip from "jszip";
 import Tesseract from "tesseract.js";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const sharp = require("sharp");
 
 export const maxDuration = 60;
 
@@ -296,14 +294,7 @@ export async function POST(req: NextRequest) {
         applicationData.governmentWarning = row.governmentWarning;
       }
 
-      let buf = Buffer.from(imageBuffer);
-      const isSvg = filename.toLowerCase().endsWith(".svg");
-      if (isSvg) {
-        buf = await sharp(buf, { density: 150 }).png().toBuffer();
-      } else {
-        // Normalize contrast for real-world photos; SVGs are already clean
-        buf = await sharp(buf).greyscale().normalize().png().toBuffer();
-      }
+      const buf = Buffer.from(imageBuffer);
       const { extracted, imageQualityNotes } = await extractFromImage(buf);
 
       // Compare fields

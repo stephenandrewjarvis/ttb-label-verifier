@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import path from "path";
 import Tesseract from "tesseract.js";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const sharp = require("sharp");
 
 // Turbopack resolves __dirname as /ROOT which breaks Tesseract's worker lookup.
 // Explicitly point to the real path so workers start on the first try.
@@ -50,18 +48,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let imageBuffer = Buffer.from(await image.arrayBuffer());
-
-  // SVG → PNG at 150 dpi (Tesseract cannot read SVG directly)
-  if (image.type === "image/svg+xml") {
-    imageBuffer = await sharp(imageBuffer, { density: 150 }).png().toBuffer();
-  }
-
-  // For real-world photos (JPEG/PNG) with poor lighting or glare, normalize contrast.
-  // Skip for SVG-converted images — they're already perfect quality.
-  if (image.type !== "image/svg+xml") {
-    imageBuffer = await sharp(imageBuffer).greyscale().normalize().png().toBuffer();
-  }
+  const imageBuffer = Buffer.from(await image.arrayBuffer());
 
   let extracted: Record<string, string | null> = {
     brandName: null,
@@ -88,64 +75,8 @@ export async function POST(req: NextRequest) {
       imageQualityNotes = "Low OCR confidence detected. Label may have quality issues (blur, glare, angle, poor lighting). Please verify extracted values carefully.";
     }
 
-    // Bold detection: SVG labels have precise font-weight declarations — trust them directly.
-    // For real photos, use pixel ink density analysis.
-    if (image.type === "image/svg+xml") {
-      // All compliant SVG labels use font-weight="bold" on GOVERNMENT WARNING:
-      // We verified this at authoring time; no pixel analysis needed.
-      warningIsBold = true;
-    }
-
-    const govWord = data.words?.find((w) =>
-      w.text.toUpperCase().includes("GOVERNMENT")
-    );
-    // Pixel ink density bold detection — only for real photos, not SVG (handled above)
-    if (image.type !== "image/svg+xml" && govWord?.bbox) {
-      const { x0, y0, x1, y1 } = govWord.bbox;
-      const wordWidth = x1 - x0;
-      const wordHeight = y1 - y0;
-
-      const imgMeta = await sharp(imageBuffer).metadata();
-      const imgW = imgMeta.width ?? 0;
-      const imgH = imgMeta.height ?? 0;
-      const safeX = Math.max(0, x0);
-      const safeY = Math.max(0, y0);
-      const safeW = Math.min(wordWidth, imgW - safeX);
-      const safeH = Math.min(wordHeight, imgH - safeY);
-
-      if (safeW > 0 && safeH > 0) {
-        const cropBuffer: Buffer = await sharp(imageBuffer)
-          .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
-          .greyscale()
-          .raw()
-          .toBuffer();
-
-        const totalPixels = cropBuffer.length;
-        const darkPixels = cropBuffer.filter((p: number) => p < 128).length;
-        const wordInkDensity = darkPixels / totalPixels;
-
-        const refWord = data.words?.find(
-          (w) => w.text.length > 3 && !w.text.toUpperCase().includes("GOVERNMENT")
-        );
-        let refInkDensity = 0.15;
-
-        if (refWord?.bbox) {
-          const rw = refWord.bbox.x1 - refWord.bbox.x0;
-          const rh = refWord.bbox.y1 - refWord.bbox.y0;
-          if (rw > 0 && rh > 0) {
-            const refBuffer: Buffer = await sharp(imageBuffer)
-              .extract({ left: refWord.bbox.x0, top: refWord.bbox.y0, width: rw, height: rh })
-              .greyscale()
-              .raw()
-              .toBuffer();
-            const refDark = refBuffer.filter((p: number) => p < 128).length;
-            refInkDensity = refDark / refBuffer.length;
-          }
-        }
-
-        warningIsBold = wordInkDensity >= refInkDensity * 1.2;
-      }
-    }
+    // Bold detection is not supported without an image processing library.
+    // warningIsBold remains null — the UI will prompt the reviewer to verify visually.
   } catch (error) {
     return Response.json(
       { error: `Failed to process image: ${error instanceof Error ? error.message : "Unknown error"}` },
