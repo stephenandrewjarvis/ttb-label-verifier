@@ -64,6 +64,21 @@ export const COLA_APPLICATIONS: Record<string, ColaApplication> = {
     countryOfOrigin: "SCOTLAND",
     labelImagePath: "/samples/label-scotch.png",
   },
+  // Needs-review demo: brand name on label reads "CARIBBEAN GOLD SPIRITS" (no "CO." suffix)
+  // while the application has "CARIBBEAN GOLD SPIRITS CO." — triggers a fuzzy match on brandName,
+  // leaving the overall verdict as needs_review rather than pass or fail.
+  "TTB-2024-006": {
+    appNumber: "TTB-2024-006",
+    applicantName: "Caribbean Gold Spirits Co.",
+    submittedDate: "2024-06-03",
+    brandName: "CARIBBEAN GOLD SPIRITS CO.",
+    classType: "Rum",
+    alcoholContent: "40% ALC./VOL. 80 PROOF",
+    netContents: "750 mL",
+    producerName: "BOTTLED BY CARIBBEAN GOLD SPIRITS 456 PALM AVE, MIAMI, FLORIDA 33101",
+    countryOfOrigin: "",
+    labelImagePath: "/samples/label-rum.png",
+  },
   // Intentional compliance violation for demo: the label's warning reads "Government Warning:"
   // in title case rather than the required ALL CAPS. Every other field matches, so the review
   // isolates the strict government-warning check and returns a REJECTED verdict.
