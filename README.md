@@ -1,16 +1,27 @@
 # TTB Label Verification System
 
-A prototype that automates alcohol label compliance review for the Alcohol and Tobacco Tax and Trade Bureau (TTB). An agent opens an application, the system reads the label artwork with on-device OCR, and it reports — field by field — whether the printed label matches what was submitted in the COLA application.
+A prototype that automates alcohol label compliance review for the Alcohol and Tobacco Tax and Trade Bureau (TTB). An agent opens an application, the system reads the label artwork with on-device OCR, and reports — field by field — whether the printed label matches what was submitted in the COLA application.
 
-Built in response to the TTB AI-Powered Alcohol Label Verification take-home assessment.
+Built for the TTB AI-Powered Alcohol Label Verification take-home assessment.
 
 ---
 
 ## Live Demo
 
-**[https://ttb-label-verifier.vercel.app](https://ttb-label-verifier.vercel.app)**
+**[https://ttb-label-verifier-nu.vercel.app](https://ttb-label-verifier-nu.vercel.app)**
 
-No login, no API key, no setup required to try it — open the demo, click **Review** on any application in the queue, and you'll see verification results in a few seconds.
+No login, no API key, no setup required. Open the demo, select any application from the queue, and click **Review**. Results appear in a few seconds.
+
+Six demo applications cover all three verdicts:
+
+| Application | Product | Expected Verdict |
+|---|---|---|
+| TTB-2024-001 | Old Tom Bourbon | APPROVED |
+| TTB-2024-002 | Silver Ridge Cabernet | APPROVED |
+| TTB-2024-003 | Iron Anvil IPA | APPROVED |
+| TTB-2024-004 | Glen Cairn Scotch | APPROVED |
+| TTB-2024-005 | Silverpeak Vodka | REJECTED — government warning in title case |
+| TTB-2024-006 | Caribbean Gold Rum | NEEDS REVIEW — brand name abbreviated on label |
 
 ---
 
@@ -19,10 +30,11 @@ No login, no API key, no setup required to try it — open the demo, click **Rev
 ### Prerequisites
 
 - Node.js 18 or higher
+- npm
 
-That's it. There are **no API keys and no external services** to configure — all OCR runs locally (see [Why no cloud AI](#why-no-cloud-ai) below).
+No API keys. No external services. All OCR runs on-server.
 
-### Install and run
+### Install and run locally
 
 ```bash
 git clone https://github.com/stephenandrewjarvis/ttb-label-verifier.git
@@ -48,141 +60,114 @@ npm test
 
 ---
 
-## How It Works
+## Approach
 
-The app has three modes, reached from the tabs at the top. Each maps to a real workflow described in the stakeholder interviews.
+### The core problem
 
-### 1. Application Review — the single-agent queue
+TTB agents manually compare every field on a printed label against the submitted COLA application — brand name, class/type, alcohol content, net contents, producer name, country of origin, and the government warning. At 5–10 minutes per label, with hundreds of applications at peak season, this is a bottleneck that automation should eliminate.
 
-This is the primary flow. It simulates what an agent sees when COLAs Online hands them their assigned applications. A queue lists pending applications with applicant, class/type, submission date, and a label thumbnail. The agent clicks **Review** on one, and the system:
+### Three verification workflows
 
-1. Pulls the application data and label artwork from COLA (simulated by `lib/cola-applications.ts`)
-2. Runs OCR on the label
-3. Compares every required field and renders a pass / needs-review / fail verdict
+**Application Review** — the primary queue. The agent sees their assigned applications listed with applicant, product type, submission date, and a label thumbnail. One click runs OCR and returns a verdict. Badges persist on each row so the agent can track what's left without re-opening anything.
 
-A colored badge appears next to each application once reviewed, so the agent can see at a glance what's left in their queue. No typing, no file handling — it mirrors the real "open application → check label" task that Sarah Chen described as taking 5–10 minutes per label by hand.
+**Bulk Review** — paste any number of application numbers and get a combined report. Built for supervisors and QA running entire batches without opening each application individually.
 
-### 2. Bulk Review — paste a list of application numbers
+**Batch Upload** — upload a ZIP of label images and a CSV of application data. Designed for importers submitting labels that are not yet in COLA, or for processing historical records.
 
-For supervisors or QA running many applications at once. Paste application numbers (one per line or comma-separated), and the system pulls each from COLA, runs OCR, and compiles a summary report with live progress and expandable per-field detail. This directly addresses the peak-season pain Sarah raised — big importers dumping 200–300 applications that today are processed one at a time.
+### Why Tesseract instead of a cloud vision model
 
-### 3. Batch Upload — external images + CSV
+The government network blocks outbound traffic to most domains, including commercial AI endpoints such as the Claude Vision API. Every OCR operation in this system runs on-server using [Tesseract.js](https://github.com/naptha/tesseract.js), with the English language model (`eng.traineddata`) bundled directly into the deployment. No label image ever leaves the environment. This also sidesteps PII and data-retention concerns — there is no third party receiving submission data.
 
-For labels that aren't in COLA (importers, legacy artwork). Upload a ZIP of label images plus a CSV of application data; the system processes all of them and returns a summary table. This is Janet from Seattle's longstanding batch request.
+The trade-off is accuracy on difficult images. A cloud vision model would handle low-resolution photographs, glare, and skew more reliably than Tesseract. We partially compensate with a persistent Tesseract worker (avoiding re-loading the 5 MB WASM engine on every request) and field-level fuzzy matching to absorb minor OCR noise.
 
----
+### Comparison logic
 
-## Approach and Technical Decisions
+Each field uses the comparison method appropriate to its regulatory requirement:
 
-### Why no cloud AI
+- **Alcohol content** — compared by ABV percentage only. OCR frequently reorders tokens like `45% ALC./VOL. 90 PROOF`, so we extract the numeric percentage and compare that alone.
+- **Government warning** — strict containment check after whitespace normalization. The full required text must appear on the label verbatim.
+- **All other fields** — normalized (lowercase, strip punctuation, collapse whitespace) and compared with a length-ratio guard. If one value contains the other and the shorter is at least 60% of the longer, the result is **Fuzzy Match — Needs Review** rather than an outright failure. This handles real-world cases like `STONE'S THROW` vs. `Stone's Throw` or an abbreviated producer name.
 
-Marcus Williams flagged that TTB's network blocks outbound traffic to most domains, and that the previous scanning vendor's features broke because the firewall blocked their ML endpoints. That constraint drove the single most important decision in this prototype:
+### Verdicts
 
-**All OCR runs on-server with [Tesseract.js](https://github.com/naptha/tesseract.js) — no external API calls, no cloud vision service, no data ever leaving the environment.** The trained OCR model (`eng.traineddata`) ships with the app. This means the tool will actually run inside TTB's network, and it sidesteps the PII and data-retention concerns Marcus raised, since label images are never transmitted anywhere.
-
-The trade-off is accuracy: a cloud vision model would extract messy real-world photos more reliably than Tesseract. We mitigate this with an image-preprocessing pipeline (below) and a human-in-the-loop review step, but it's an honest limitation — see [Assumptions and Trade-offs](#assumptions-and-trade-offs).
-
-### Speed — the 5-second bar
-
-Sarah was explicit: the last vendor took 30–40 seconds per label and agents abandoned it. Running OCR locally with a persistent Tesseract worker returns results in roughly 2–4 seconds per label, under the 5-second threshold she called non-negotiable. (An early bug where the OCR worker crashed and silently retried pushed response times to 70+ seconds; pinning the worker path fixed it — a reminder that the 5-second bar is fragile and worth guarding in production.)
-
-### Image preprocessing
-
-Because Tesseract is more sensitive to image quality than a cloud model, `sharp` normalizes input before OCR:
-
-- **Vector labels (SVG)** are rasterized at higher density and read directly — they're already clean.
-- **Real-world photos** are converted to greyscale and contrast-normalized to handle the bad lighting, angles, and glare Jenny Park described.
-
-This partially addresses Jenny's "labels aren't perfectly shot" concern. It is not a substitute for a full computer-vision deskew/dewarp pipeline, which would be the production next step.
-
-### Fuzzy match with human override
-
-Dave Morrison gave the definitive example: `STONE'S THROW` on the label vs. `Stone's Throw` in the application — technically a mismatch, obviously the same thing. A binary system would generate noise and erode trust. Fields use normalized comparison with a length-ratio guard (minimum 0.6) to catch obvious equivalences, surface them as **"Likely Match — Review"** rather than failures, and let the agent approve with one click. Alcohol content is compared by ABV percentage alone, because OCR frequently reorders the `45% ALC./VOL. 90 PROOF` tokens.
-
-### Strict government warning validation
-
-Jenny Park was emphatic that the warning must be exact — word-for-word, with `GOVERNMENT WARNING:` in all caps and bold. This is the only field that **cannot** be overridden, and it checks three things independently:
-
-1. **Text** — the label must contain the full required warning verbatim (after whitespace normalization)
-2. **Caps** — `GOVERNMENT WARNING:` must appear in all caps
-3. **Bold** — for vector labels we trust the font-weight declaration; for photos we measure pixel ink density against neighboring text
-
-Each failure produces a specific note ("'GOVERNMENT WARNING:' does not appear bold") rather than a generic rejection, so the agent knows exactly what's wrong.
-
-### UI simplicity
-
-Sarah's benchmark was her 73-year-old mother. The interface is clean and obvious — a queue on the left, results on the right, every status color-coded with a plain-English label, no hidden controls and no account. It follows U.S. Web Design System conventions (federal blue `#005EA2`, the two-bar government header) so it feels native to a federal workflow rather than like outside software.
+- **APPROVED** — all required fields match (exact or fuzzy with no flags)
+- **NEEDS REVIEW** — at least one fuzzy match; no outright failures
+- **REJECTED** — one or more fields are missing from the label or mismatched
 
 ---
 
-## Architecture
-
-```
-app/
-├── page.tsx                  # Main UI — Application Review, Bulk Review, Batch Upload
-├── header.tsx / title.tsx / footer.tsx   # USWDS government chrome
-├── layout.tsx / globals.css  # Fonts, USWDS color system
-└── api/
-    ├── cola-lookup/route.ts  # Fetch one application by number (simulates COLA/Azure)
-    ├── verify/route.ts       # Single-label OCR + field comparison
-    └── verify-batch/route.ts # ZIP + CSV batch OCR
-
-lib/
-├── cola-applications.ts      # Simulated COLA application database (4 demo records)
-└── verify-logic.ts           # Pure comparison logic — shared by routes and tests
-
-public/samples/               # Demo label artwork (SVG) + batch CSV/ZIP templates
-tests/verify-logic.test.ts    # 49 unit tests
-```
-
-### Tools Used
+## Tools Used
 
 | Tool | Purpose |
 |---|---|
-| Next.js 16 (App Router) | Framework and API routes |
+| Next.js 16 (App Router + Turbopack) | Framework and serverless API routes |
 | React 19 | UI |
-| Tesseract.js | On-server OCR — no external calls |
-| sharp | Image preprocessing (rasterize, greyscale, normalize) |
-| JSZip | ZIP extraction for batch mode |
+| Tesseract.js 5 | On-server OCR — no external calls |
+| JSZip | ZIP extraction for batch upload mode |
+| Tailwind CSS v3 | Styling |
 | TypeScript | Type safety throughout |
-| Vitest | Unit tests (49) |
+| Vitest | Unit tests |
 | Vercel | Deployment |
 
 ---
 
-## Assumptions and Trade-offs
+## Assumptions Made
 
-**No COLA integration.** Per Marcus, direct COLA integration is out of scope. `lib/cola-applications.ts` holds five simulated applications standing in for what would be an Azure/COLA `.NET` API call. The Application Review and Bulk Review flows are built so that swapping this module for a real API client is the only change needed.
+**No live COLA integration.** Direct COLA integration is out of scope for the prototype. `lib/cola-applications.ts` holds six simulated records standing in for what would be an Azure/COLA .NET API call. The single-application and bulk review flows are structured so that swapping this module for a real API client requires no other changes.
 
-**One application is intentionally non-compliant.** `TTB-2024-005` (Silverpeak Vodka) has every field matching *except* a government warning printed as "Government Warning:" in title case instead of the required ALL CAPS — Jenny Park's exact real-world example. Reviewing it returns a **REJECTED** verdict, so an evaluator can see the strict warning check reject something rather than only seeing passing labels.
+**Clean label artwork for the demo.** The six sample labels are clean PNG files exported from SVG, which gives Tesseract its best chance. Real submissions are often photographs taken at angles, under bad lighting, or with glare from shrink wrap. The preprocessing path handles those cases but the demo does not exercise that code path heavily.
 
-**On-device OCR over cloud accuracy.** Tesseract was chosen specifically to satisfy the network/firewall constraint, accepting lower raw accuracy on messy photos than a cloud vision model would give. The preprocessing pipeline and human review step compensate, but very poor images may still need an agent to request a better photo — which matches current practice.
+**Stateless by design.** No user accounts, no session storage, no database. Every verification is stateless and nothing is retained between sessions. This avoids PII and document-retention questions that would require legal review before a production deployment.
 
-**No authentication or persistence.** The prototype stores nothing between sessions; every verification is stateless. This sidesteps the PII and document-retention concerns Marcus flagged for production.
+**Synchronous batch processing.** Batch jobs process all images within the request lifecycle. A production system handling 200–300 labels would need a durable job queue with progress callbacks and retry logic.
 
-**Synchronous batch processing.** Batch and bulk jobs process sequentially/in-parallel within the request. A production system handling 200–300 labels would want a job queue with durable progress — noted but out of scope.
-
-**SVG demo labels.** The sample labels are clean vector artwork, which flatters OCR accuracy. Real submissions are photographs; the preprocessing path exists for them but is exercised less in the demo.
-
-**Fixed CSV format.** Batch CSV requires a `filename` column matching image names in the ZIP exactly; column names are case-sensitive. A template is downloadable in-app.
+**Fixed CSV schema for batch upload.** The CSV must have a `filename` column whose values match image filenames in the ZIP exactly. A downloadable template is provided in-app.
 
 ---
 
-## Requirements Coverage
+## Limitations
 
-| Requirement (from stakeholder interviews) | Status |
-|---|---|
-| Verify label fields against application data | ✓ |
-| Extract fields from label image automatically | ✓ Tesseract OCR |
-| Field-by-field match report | ✓ |
-| Results in under ~5 seconds | ✓ ~2–4s per label |
-| Works inside a firewalled network (no external ML) | ✓ On-server OCR |
-| Fuzzy match with human judgment (STONE'S THROW) | ✓ Override on non-exact fields |
-| Exact government warning — text, ALL CAPS, bold | ✓ Strict, non-overridable |
-| Handle imperfect images (angle, glare, lighting) | ◑ Preprocessing pipeline; partial |
-| Batch upload for large importers | ✓ Bulk Review + Batch Upload |
-| Simple UI for low-tech-comfort agents | ✓ USWDS, two-pane, no hidden controls |
-| Unit tests | ✓ 49 tests on comparison logic |
+### Bold and font-size formatting cannot be verified
+
+TTB regulations require the government warning to appear in **bold** at a minimum font size. This prototype verifies the warning text and capitalization but cannot verify bold weight or font size from a raster image.
+
+Detecting typographic properties from pixels requires either (a) a computer vision model trained specifically for text attribute classification, or (b) access to the source file where font metadata is encoded directly. Option (a) is blocked by the same network restriction that ruled out cloud OCR. Option (b) is achievable — see Future Improvements below.
+
+For now, the system flags a note on government warning results: *"Bold formatting and minimum font size could not be verified — confirm visually."* This surfaces the gap to the agent rather than silently skipping it.
+
+### OCR accuracy degrades on poor photographs
+
+Tesseract performs well on clean, high-contrast labels (92–95% confidence on the demo labels) but accuracy drops on photos with motion blur, glare, extreme angles, or very small text. A cloud vision model would handle these cases better. Until network restrictions allow it, images below a confidence threshold prompt the agent to request a better photograph rather than accepting a low-confidence result.
+
+### No multi-language support
+
+The OCR model is English only. Labels in Spanish or other languages permitted in some product categories will extract poorly. Adding language models is straightforward technically but was not scoped for this prototype.
+
+### No deskew or dewarp
+
+Photographs of labels on curved bottles or taken at an angle need geometric correction before OCR. The preprocessing pipeline converts to greyscale and normalizes contrast but does not correct perspective distortion. This is the highest-impact single improvement for real-world photo submissions.
+
+---
+
+## Future Improvements
+
+**1. PDF-native formatting extraction**
+If TTB required label artwork to be submitted as PDF (which many applicants already do), font metadata — bold weight, point size, typeface — is encoded in the file structure and extractable without any ML. A `pdf-parse` integration could verify bold and font-size requirements programmatically, closing the largest remaining gap without touching the network restriction.
+
+**2. Deskew and dewarp preprocessing**
+Adding an OpenCV-based perspective correction step before OCR would handle curved-bottle photographs and images taken at an angle. This runs locally with no network dependency.
+
+**3. Live COLA API integration**
+Replace `lib/cola-applications.ts` with a real call to the COLA/Azure .NET API. The interface is already isolated behind a single async function; the swap is a one-file change once API credentials and the endpoint contract are available.
+
+**4. Asynchronous job queue for batch processing**
+Move bulk and batch jobs off the request lifecycle onto a durable queue (Redis + BullMQ or similar). Return a job ID immediately, stream progress via Server-Sent Events, and persist results so the agent can close the tab and come back. This is the critical path for the 200–300 label peak-season workload.
+
+**5. Network-approved cloud OCR**
+If TTB's IT security team approves specific domains through the firewall, switching the OCR backend to Azure Document Intelligence (already within the Microsoft government cloud boundary many agencies use) would dramatically improve accuracy on difficult images while maintaining data-residency guarantees. The comparison and UI layers are backend-agnostic and would not need to change.
+
+**6. Agent feedback loop**
+When an agent overrides a fuzzy-match verdict, capture that correction. Over time these corrections become training signal to improve the field-extraction heuristics — or, if a network-approved ML model becomes available, to fine-tune it on TTB-specific label formats.
 
 ---
 
