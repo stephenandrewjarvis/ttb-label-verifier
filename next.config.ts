@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  images: { unoptimized: true },
   serverExternalPackages: ["tesseract.js"],
   // Tesseract's worker, WASM core, and language data are loaded via runtime-built paths
   // that Next's static file tracer can't detect. Force them into the serverless bundle so
