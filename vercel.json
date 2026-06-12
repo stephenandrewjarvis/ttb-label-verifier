@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm install --include=optional && npm uninstall sharp",
+  "installCommand": "npm install",
   "buildCommand": "npm run build"
 }
