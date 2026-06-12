@@ -6,8 +6,6 @@ import Tesseract from "tesseract.js";
 export const maxDuration = 60;
 
 const WORKER_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js/src/worker-script/node/index.js");
-// Pin Tesseract assets to the bundled copies and cache to /tmp — Vercel root is read-only
-// and the target network has no outbound CDN access. See next.config.ts tracing includes.
 const CORE_PATH = path.resolve(process.cwd(), "node_modules/tesseract.js-core");
 const LANG_PATH = process.cwd();
 const TESSERACT_OPTIONS = {
@@ -17,6 +15,21 @@ const TESSERACT_OPTIONS = {
   cachePath: "/tmp",
   gzip: false,
 };
+
+let workerPromise: Promise<Tesseract.Worker> | null = null;
+
+function getWorker(): Promise<Tesseract.Worker> {
+  if (!workerPromise) {
+    workerPromise = Tesseract.createWorker("eng", 1, {
+      logger: () => {},
+      ...TESSERACT_OPTIONS,
+    }).catch((err) => {
+      workerPromise = null;
+      throw err;
+    });
+  }
+  return workerPromise;
+}
 
 const GOVERNMENT_WARNING =
   "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
@@ -209,10 +222,8 @@ async function extractFromImage(
     // Convert ArrayBuffer to Buffer if needed
     const bufferInput = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer);
     
-    const { data } = await Tesseract.recognize(bufferInput, "eng", {
-      logger: () => {},
-      ...TESSERACT_OPTIONS,
-    });
+    const worker = await getWorker();
+    const { data } = await worker.recognize(bufferInput);
 
     const fullText = data.text;
     const extracted = extractFieldsFromText(fullText);

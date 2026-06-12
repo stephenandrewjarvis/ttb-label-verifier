@@ -17,8 +17,24 @@ const TESSERACT_OPTIONS = {
   gzip: false,
 };
 
-// Cold starts load the WASM core and 5 MB language model; give them headroom under the 5s bar.
 export const maxDuration = 60;
+
+// Module-level worker: initialized once and reused across warm invocations so the
+// WASM core and 5 MB language model are only loaded on the first request.
+let workerPromise: Promise<Tesseract.Worker> | null = null;
+
+function getWorker(): Promise<Tesseract.Worker> {
+  if (!workerPromise) {
+    workerPromise = Tesseract.createWorker("eng", 1, {
+      logger: () => {},
+      ...TESSERACT_OPTIONS,
+    }).catch((err) => {
+      workerPromise = null; // reset so next request retries
+      throw err;
+    });
+  }
+  return workerPromise;
+}
 
 const GOVERNMENT_WARNING =
   "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
@@ -63,10 +79,8 @@ export async function POST(req: NextRequest) {
   let warningIsBold: boolean | null = null;
 
   try {
-    const { data } = await Tesseract.recognize(imageBuffer, "eng", {
-      logger: () => {},
-      ...TESSERACT_OPTIONS,
-    });
+    const worker = await getWorker();
+    const { data } = await worker.recognize(imageBuffer);
 
     const fullText = data.text;
     extracted = extractFieldsFromText(fullText);
