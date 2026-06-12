@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm install --include=optional",
+  "installCommand": "npm install && npm install lightningcss-linux-x64-gnu@1.32.0",
   "buildCommand": "npm run build"
 }
