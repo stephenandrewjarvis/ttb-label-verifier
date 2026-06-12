@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm ci --include=optional",
+  "installCommand": "rm -rf node_modules/sharp node_modules/@img && npm ci --include=optional",
   "buildCommand": "npm run build"
 }
