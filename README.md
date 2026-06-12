@@ -60,6 +60,54 @@ npm test
 
 ---
 
+## How We Addressed Each Stakeholder
+
+### Sarah Chen — Deputy Director of Label Compliance
+
+**"If we can't get results back in about 5 seconds, nobody's going to use it."**
+→ The previous vendor's 30–40 second response times came from spinning up an OCR engine on every request. We pin a single Tesseract worker at module load time so the WASM engine and language model stay warm between requests. Cold-start on first request takes a few seconds; subsequent requests return in 2–4 seconds per label.
+
+**"We need something my mother could figure out — she's 73."**
+→ The UI follows U.S. Web Design System conventions (the same visual language agents see across federal tools), uses plain-English status labels with color coding, and has no hidden controls or multi-step flows. The primary task — review a label — is a single click from the queue.
+
+**"During peak season, big importers dump 200, 300 label applications on us at once."** *(Janet from Seattle's longstanding request)*
+→ Two batch modes address this: Bulk Review accepts a pasted list of application numbers and runs them all at once with a live progress report; Batch Upload accepts a ZIP of label images plus a CSV of application data for labels not yet in COLA.
+
+---
+
+### Marcus Williams — IT Systems Administrator
+
+**"Our network blocks outbound traffic to a lot of domains... half their features didn't work because our firewall blocked connections to their ML endpoints."**
+→ All OCR runs on-server with Tesseract.js. The trained language model ships inside the deployment. No outbound network calls are made during verification — not to any ML API, cloud vision service, or external domain.
+
+**"There's PII considerations, document retention policies, the usual federal compliance stuff."**
+→ The system is stateless by design. No label images, application data, or verification results are stored anywhere. Each request is processed in memory and discarded. Nothing persists between sessions.
+
+**"We're not looking to integrate with COLA directly — think of this as a standalone proof-of-concept."**
+→ Application data is isolated behind a single module (`lib/cola-applications.ts`) that simulates a COLA API call. Swapping it for a real Azure/.NET endpoint is a one-file change when that integration is ready.
+
+---
+
+### Dave Morrison — Senior Compliance Agent (28 years)
+
+**"The brand name was 'STONE'S THROW' on the label but 'Stone's Throw' in the application. Technically a mismatch? Sure. But it's obviously the same thing. You need judgment."**
+→ Non-critical fields use normalized fuzzy comparison: lowercase, strip punctuation, collapse whitespace, then check containment with a minimum 60% length-ratio guard. `STONE'S THROW` and `Stone's Throw` both normalize to `stones throw` and match exactly. Genuine near-matches surface as **Needs Review** so the agent makes the final call rather than the system rejecting something obvious.
+
+---
+
+### Jenny Park — Junior Compliance Agent (8 months)
+
+**"The 'GOVERNMENT WARNING:' part has to be in all caps and bold. People try to get creative with the warning all the time."**
+→ The government warning check is strict and non-overridable. It verifies the full warning text verbatim (after whitespace normalization) and separately checks that `GOVERNMENT WARNING:` appears in all caps. Demo application TTB-2024-005 intentionally uses title case (`Government Warning:`) and receives a REJECTED verdict, isolating exactly the violation Jenny described.
+
+**"Bold... I caught one last month where they used 'Government Warning' in title case instead of all caps."**
+→ Capitalization is verified automatically. Bold weight cannot be detected from a raster image without a computer vision model (blocked by the network restriction Marcus described). The system flags this explicitly — *"Bold formatting could not be verified — confirm visually"* — so the agent knows to check rather than the gap being silently ignored. PDF-native formatting extraction is the planned fix; see Future Improvements.
+
+**"It would be amazing if the tool could handle images that aren't perfectly shot."**
+→ The preprocessing pipeline converts uploads to greyscale and normalizes contrast before OCR to handle lighting and glare. Full perspective correction (curved bottles, extreme angles) is documented as the highest-impact next improvement but was not in scope for the prototype.
+
+---
+
 ## Approach
 
 ### The core problem
