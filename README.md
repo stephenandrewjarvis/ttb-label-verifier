@@ -12,6 +12,8 @@ Built for the TTB AI-Powered Alcohol Label Verification take-home assessment.
 
 No login, no API key, no setup required. Open the demo, select any application from the queue, and click **Review**. Results appear in a few seconds.
 
+> **Note on cold starts:** The demo runs on Vercel's free tier. If the serverless function hasn't been used recently, the first request may take 10–15 seconds while the OCR engine loads. Subsequent requests are fast. This is a hosting constraint, not a performance issue with the application itself.
+
 Six demo applications cover all three verdicts:
 
 | Application | Product | Expected Verdict |
